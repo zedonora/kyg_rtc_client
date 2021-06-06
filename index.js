@@ -1,7 +1,7 @@
 import './style.css'
 
-const ws = new WebSocket("ws://localhost:8080/websocket")
-const myVideo = document.body.querySelector('#myVideo')
+//const ws = new WebSocket("ws://localhost:8080/websocket")
+const ws = new WebSocket("ws://172.26.112.1:8080/websocket")
 
 const rtcConfiguration = {}
 
@@ -14,8 +14,8 @@ function sendJSON(object) {
   ws.send(message)
 }
 
-let sessionId = null;
-let localPeer = null;
+let sessionId = null
+const localPeers = {}
 
 function handleMessage(message) {
   try {
@@ -57,12 +57,10 @@ function handleMessage(message) {
 
 const channelForm = document.querySelector("#channelForm")
 
-let localStream = null
-
-async function initializeStream() {
+async function createMediaStream() {
   try {
-    localStream = await navigator.mediaDevices.getUserMedia({audio:true, video: true})
-    console.log('Received localStream');
+    const stream = await navigator.mediaDevices.getUserMedia({audio:true, video: true})
+    return stream
   } catch (e) {
     console.error(e)
   }
@@ -76,21 +74,27 @@ function enterChannel(channelName) {
 }
 
 async function call(to) {
-  if (!localStream) return;
+  const stream = await createMediaStream()
 
   localPeer = new RTCPeerConnection(rtcConfiguration)
+  localPeers[to] = localPeer
+
   localPeer.addEventListener('icecandidate', e => {
     icecandidate(to, e.candidate)
   })
 
+  const video = document.createElement('video')
+  document.body.appendChild(video)
+  video.autoplay = true
+
   localPeer.addEventListener('track', ev => {
-    if (myVideo.srcObject !== ev.streams[0]) {
-      myVideo.srcObject = ev.streams[0]
+    if (video.srcObject !== ev.streams[0]) {
+      video.srcObject = ev.streams[0]
     }
   })
 
-  localStream.getTracks().forEach(track => {
-    localPeer.addTrack(track, localStream)
+  stream.getTracks().forEach(track => {
+    localPeer.addTrack(track, stream)
   })
 
   const offer = await localPeer.createOffer()
@@ -105,26 +109,39 @@ async function call(to) {
 }
 
 async function answered (from, description) {
+  const localPeer = localPeers[from]
+  
+  if (!localPeer) {
+    console.log(`localPeer ${from} does not exist`)
+    return
+  }
+
   await localPeer.setRemoteDescription(description)
   console.log(`setRemoteDescription success from ${from}`);
 }
 
 async function answer(to, description) {
-  if (!localStream) return;
+  const stream = await createMediaStream()
 
-  localPeer = new RTCPeerConnection(rtcConfiguration)
+  const localPeer = new RTCPeerConnection(rtcConfiguration)
+  localPeers[to] = localPeer
+
   localPeer.addEventListener('icecandidate', e => {
     icecandidate(to, e.candidate)
   })
 
+  const video = document.createElement('video')
+  document.body.appendChild(video)
+  video.autoplay = true
+
   localPeer.addEventListener('track', ev => {
-    if (myVideo.srcObject !== ev.streams[0]) {
-      myVideo.srcObject = ev.streams[0]
+    if (video.srcObject !== ev.streams[0]) {
+      video.srcObject = ev.streams[0]
     }
   })
 
-  localStream.getTracks().forEach(track => {
-    localPeer.addTrack(track, localStream)
+  stream.getTracks().forEach(track => {
+    localPeer.addTrack(track, stream)
   })
 
   await localPeer.setRemoteDescription(description)
@@ -147,6 +164,13 @@ async function icecandidate(to, candidate) {
 }
 
 function candidated(from, candidate) {
+  const localPeer = localPeers[from]
+  
+  if (!localPeer) {
+    console.log(`localPeer ${from} does not exist`)
+    return
+  }
+  
   try {
     localPeer.addIceCandidate(candidate)
     console.log(`Candidate from ${from} success!`);
@@ -158,10 +182,17 @@ function candidated(from, candidate) {
 channelForm.addEventListener('submit', async e=> {
   channelForm.querySelector('button').disabled = true
   e.preventDefault();
-
-  await initializeStream();
   enterChannel(channelForm.channelName.value)
 })
+
+createMediaStream().then((stream) => {
+  const myVideo = document.createElement('video')
+  document.body.appendChild(myVideo)
+  myVideo.autoplay = true
+
+  myVideo.srcObject = stream
+  myVideo.volume = 0
+}) 
 
 // async function loadCamera() {
 //   try {
