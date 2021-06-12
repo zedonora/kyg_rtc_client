@@ -4,7 +4,7 @@
   "main": "index.js",
   "license": "MIT",
   "devDependencies": {
-    "snowpack": "^3.5.5"
+    "snowpack": "^3.5.7"
   },
   "scripts": {
     "start": "snowpack dev"
